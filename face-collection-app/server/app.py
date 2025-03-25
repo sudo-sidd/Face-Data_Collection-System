@@ -4,6 +4,9 @@ import uuid
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from datetime import datetime
+import qrcode
+from io import BytesIO
+import base64
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -102,5 +105,28 @@ def upload_video(session_id):
         "message": "Video uploaded successfully"
     }), 200
 
+@app.route('/qr')
+def generate_qr():
+    # Generate QR code for the HTTPS URL
+    url = f"https://{request.host}"
+    img = qrcode.make(url)
+    
+    # Convert to base64 for display
+    buffered = BytesIO()
+    img.save(buffered)
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+    
+    # Return simple HTML with QR code
+    return f"""
+    <html>
+        <head><title>Scan to connect</title></head>
+        <body style="text-align: center; padding: 50px;">
+            <h1>Scan this QR code with your phone</h1>
+            <img src="data:image/png;base64,{img_str}">
+            <p>Or visit: <a href="{url}">{url}</a></p>
+        </body>
+    </html>
+    """
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, ssl_context=('cert.pem', 'key.pem'), debug=True)
+    app.run(host='0.0.0.0', port=5000, ssl_context=('cert.pem', 'key.pem'))
