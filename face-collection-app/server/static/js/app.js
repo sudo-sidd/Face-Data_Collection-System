@@ -106,10 +106,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="instructions-container">
                 <h3>Instructions:</h3>
                 <ul>
-                    <li>Record a 10-second video of your face</li>
-                    <li>During recording, slowly turn your face:</li>
+                    <li><strong>Keep phone at arm's length</strong> during recording</li>
+                    <li>Find good lighting on your face</li>
+                    <li>Record a 10-second video following these steps:</li>
                     <li>- Look straight at the camera (2 sec)</li>
-                    <li>- Turn your head left and right (4 sec)</li>
+                    <li>- Slowly turn your head left and right (4 sec)</li>
                     <li>- Look slightly up and down (2 sec)</li>
                     <li>- Make a neutral and then smiling expression (2 sec)</li>
                 </ul>

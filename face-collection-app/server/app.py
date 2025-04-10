@@ -7,6 +7,11 @@ from datetime import datetime
 import qrcode
 from io import BytesIO
 import base64
+import cv2
+import numpy as np
+import tempfile
+import time
+from ultralytics import YOLO  # Add this import
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -14,6 +19,188 @@ CORS(app)
 # Configuration
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 os.makedirs(DATA_DIR, exist_ok=True)
+
+# Add path to YOLO model
+YOLO_MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'yolo/weights/yolo11n-face.pt')
+
+# Face processing functions
+def preprocess_face_for_lightcnn(face_img, target_size=(128, 128)):
+    """
+    Process a face image for LightCNN:
+    - Convert to grayscale
+    - Resize to target size
+    """
+    # Convert to grayscale
+    gray = cv2.cvtColor(face_img, cv2.COLOR_BGR2GRAY)
+    
+    # Resize to target size
+    resized = cv2.resize(gray, target_size, interpolation=cv2.INTER_LANCZOS4)
+    
+    return resized
+
+def extract_faces_from_video(video_path, output_dir, face_confidence=0.3, face_padding=0.2):
+    """Extract faces from video and save preprocessed images using YOLO"""
+    # Check if output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Initialize face detector with YOLO
+    try:
+        face_model = YOLO(YOLO_MODEL_PATH)
+        print(f"Loaded YOLO model from {YOLO_MODEL_PATH}")
+    except Exception as e:
+        print(f"Error loading YOLO model: {e}")
+        print("Falling back to OpenCV Haar cascade")
+        # Fallback to Haar cascade if YOLO model fails to load
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        use_yolo = False
+    else:
+        use_yolo = True
+    
+    # Open video
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"Error: Could not open video {video_path}")
+        return 0
+    
+    # Get video properties
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    print(f"Video info: {frame_count} frames, {fps} fps, {width}x{height} resolution")
+    
+    # Initialize counters
+    faces_saved = 0
+    processed_frames = 0
+    
+    # Use a lower sample rate to process more frames
+    sample_rate = 5  # Process every 5th frame (changed from 30)
+    frames_per_sample = 3
+    
+    # Process each frame in the video
+    for current_frame in range(0, frame_count, sample_rate):
+        print(f"Processing frame batch starting at frame {current_frame}")
+        
+        # Process next frames_per_sample frames
+        for i in range(frames_per_sample):
+            # Make sure we don't go beyond the end of the video
+            if current_frame + i >= frame_count:
+                break
+            
+            # Set position and read frame
+            cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame + i)
+            ret, frame = cap.read()
+            if not ret:
+                print(f"Failed to read frame {current_frame + i}")
+                break
+            
+            processed_frames += 1
+            
+            # Save a debug frame occasionally to check if video is readable
+            if processed_frames % 10 == 0:
+                debug_filename = os.path.join(output_dir, f"debug_frame_{current_frame + i}.jpg")
+                cv2.imwrite(debug_filename, frame)
+                print(f"Saved debug frame to {debug_filename}")
+            
+            # Detect faces using YOLO or fallback to Haar cascade
+            if use_yolo:
+                # YOLO face detection
+                results = face_model(frame, conf=face_confidence)
+                
+                # Check detection results
+                if len(results) > 0:
+                    print(f"YOLO detection on frame {current_frame + i}: {len(results)} results")
+                    
+                    if hasattr(results[0], 'boxes') and len(results[0].boxes) > 0:
+                        print(f"  Found {len(results[0].boxes)} boxes")
+                        
+                        for j, box in enumerate(results[0].boxes):
+                            # Get bounding box coordinates
+                            x1, y1, x2, y2 = map(int, box.xyxy[0])
+                            conf = float(box.conf[0])
+                            
+                            print(f"  Box {j}: coords={x1},{y1},{x2},{y2}, conf={conf:.2f}")
+                            
+                            # Skip if below confidence threshold
+                            if conf < face_confidence:
+                                print(f"  Skipping box {j} - confidence too low")
+                                continue
+                            
+                            # Add padding around face
+                            face_width = x2 - x1
+                            face_height = y2 - y1
+                            pad_x = int(face_width * face_padding)
+                            pad_y = int(face_height * face_padding)
+                            
+                            # Ensure coordinates are within frame boundaries
+                            x1 = max(0, x1 - pad_x)
+                            y1 = max(0, y1 - pad_y)
+                            x2 = min(frame.shape[1], x2 + pad_x)
+                            y2 = min(frame.shape[0], y2 + pad_y)
+                            
+                            # Crop face
+                            face = frame[y1:y2, x1:x2]
+                            
+                            # Skip if face crop is empty
+                            if face.size == 0 or face.shape[0] == 0 or face.shape[1] == 0:
+                                print(f"  Skipping box {j} - empty crop")
+                                continue
+                            
+                            # Preprocess face
+                            processed_face = preprocess_face_for_lightcnn(face)
+                            
+                            # Create unique filename
+                            timestamp = int(time.time() * 1000)
+                            filename = f"frame{current_frame+i}_face{j}_{timestamp}.jpg"
+                            filepath = os.path.join(output_dir, filename)
+                            cv2.imwrite(filepath, processed_face)
+                            faces_saved += 1
+            else:
+                # Fallback to Haar cascade detection
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(
+                    gray, 
+                    scaleFactor=1.1, 
+                    minNeighbors=5, 
+                    minSize=(30, 30)
+                )
+                
+                # Process each detected face
+                for j, (x, y, w, h) in enumerate(faces):
+                    # Add padding around face
+                    pad_x = int(w * face_padding)
+                    pad_y = int(h * face_padding)
+                    
+                    # Ensure coordinates are within frame boundaries
+                    x1 = max(0, x - pad_x)
+                    y1 = max(0, y - pad_y)
+                    x2 = min(frame.shape[1], x + w + pad_x)
+                    y2 = min(frame.shape[0], y + h + pad_y)
+                    
+                    # Crop face
+                    face = frame[y1:y2, x1:x2]
+                    
+                    # Skip if face crop is empty
+                    if face.size == 0 or face.shape[0] == 0 or face.shape[1] == 0:
+                        continue
+                    
+                    # Preprocess face
+                    processed_face = preprocess_face_for_lightcnn(face)
+                    
+                    # Create unique filename
+                    timestamp = int(time.time() * 1000)
+                    filename = f"frame{current_frame+i}_face{j}_{timestamp}.jpg"
+                    filepath = os.path.join(output_dir, filename)
+                    
+                    # Save processed face
+                    cv2.imwrite(filepath, processed_face)
+                    faces_saved += 1
+    
+    # Close resources
+    cap.release()
+    
+    return faces_saved
 
 # Routes
 @app.route('/')
@@ -38,6 +225,10 @@ def start_session():
     student_dir = os.path.join(DATA_DIR, student_id)
     os.makedirs(student_dir, exist_ok=True)
     
+    # Create faces directory
+    faces_dir = os.path.join(student_dir, 'faces')
+    os.makedirs(faces_dir, exist_ok=True)
+    
     # Create session info
     session_data = {
         "sessionId": session_id,
@@ -46,7 +237,8 @@ def start_session():
         "year": year,
         "dept": dept,
         "startTime": datetime.now().isoformat(),
-        "videoUploaded": False
+        "videoUploaded": False,
+        "facesExtracted": False
     }
     
     with open(os.path.join(student_dir, f"{session_id}.json"), 'w') as f:
@@ -68,9 +260,13 @@ def upload_video(session_id):
     if not student_id:
         return jsonify({"error": "Registration Number is required"}), 400
     
-    # Save video
+    # Create student directory
     student_dir = os.path.join(DATA_DIR, student_id)
     os.makedirs(student_dir, exist_ok=True)
+    
+    # Create faces directory if it doesn't exist
+    faces_dir = os.path.join(student_dir, 'faces')
+    os.makedirs(faces_dir, exist_ok=True)
     
     # Get existing session data
     session_file = os.path.join(student_dir, f"{session_id}.json")
@@ -80,30 +276,94 @@ def upload_video(session_id):
     with open(session_file, 'r') as f:
         session_data = json.load(f)
     
-    # Update session data
-    session_data["videoUploaded"] = True
-    session_data["uploadTime"] = datetime.now().isoformat()
+    # Save the original WebM video
+    webm_filename = f"{student_id}_{session_id}.webm"
+    webm_path = os.path.join(student_dir, webm_filename)
+    file.save(webm_path)
+    print(f"Saved WebM video to {webm_path}")
     
-    # Update additional fields if provided in form data
-    if name:
-        session_data["name"] = name
-    if year:
-        session_data["year"] = year
-    if dept:
-        session_data["dept"] = dept
+    # Convert WebM to MP4 using FFmpeg
+    mp4_filename = f"{student_id}_{session_id}.mp4"
+    mp4_path = os.path.join(student_dir, mp4_filename)
     
-    # Save updated session data
-    with open(session_file, 'w') as f:
-        json.dump(session_data, f)
+    try:
+        # Run FFmpeg to convert the file
+        import subprocess
+        cmd = [
+            'ffmpeg', 
+            '-i', webm_path,  # Input file
+            '-c:v', 'libx264',  # Video codec
+            '-preset', 'fast',  # Encoding speed/compression trade-off
+            '-crf', '23',       # Quality
+            '-y',               # Overwrite output without asking
+            mp4_path            # Output file
+        ]
+        
+        process = subprocess.run(
+            cmd, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        if process.returncode != 0:
+            print(f"Error converting video: {process.stderr}")
+            return jsonify({
+                "success": False,
+                "message": "Failed to convert video format"
+            }), 500
+            
+        print(f"Converted video to MP4 format: {mp4_path}")
+        
+        # Extract faces from the MP4 video
+        faces_count = extract_faces_from_video(
+            mp4_path, 
+            faces_dir,
+            face_confidence=0.3,
+            face_padding=0.2
+        )
+        print(f"Extracted {faces_count} faces from {mp4_path}")
+        
+        # Update session data
+        session_data["videoUploaded"] = True
+        session_data["uploadTime"] = datetime.now().isoformat()
+        session_data["facesExtracted"] = True
+        session_data["facesCount"] = faces_count
+        
+        # Update additional fields if provided in form data
+        if name:
+            session_data["name"] = name
+        if year:
+            session_data["year"] = year
+        if dept:
+            session_data["dept"] = dept
+        
+        # Save updated session data
+        with open(session_file, 'w') as f:
+            json.dump(session_data, f)
+        
+        # Clean up video files only if faces were successfully extracted
+        if faces_count > 0:
+            try:
+                os.remove(webm_path)
+                os.remove(mp4_path)
+                print(f"Deleted video files after successful processing")
+            except Exception as e:
+                print(f"Warning: Could not delete video files: {e}")
+        else:
+            print(f"Keeping video files for debugging since no faces were extracted")
+            
+        return jsonify({
+            "success": True,
+            "message": f"Video processed successfully. Extracted {faces_count} face images."
+        }), 200
     
-    # Save the video with more descriptive filename
-    video_path = os.path.join(student_dir, f"{session_id}_{student_id}_{dept}_{year}yr.webm")
-    file.save(video_path)
-    
-    return jsonify({
-        "success": True,
-        "message": "Video uploaded successfully"
-    }), 200
+    except Exception as e:
+        print(f"Error processing video: {e}")
+        return jsonify({
+            "success": False,
+            "message": f"Error processing video: {str(e)}"
+        }), 500
 
 @app.route('/qr')
 def generate_qr():
