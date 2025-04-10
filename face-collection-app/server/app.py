@@ -11,7 +11,11 @@ import cv2
 import numpy as np
 import tempfile
 import time
-from ultralytics import YOLO  # Add this import
+import threading
+import queue
+from concurrent.futures import ThreadPoolExecutor
+import torch
+from ultralytics import YOLO
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -22,6 +26,17 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 # Add path to YOLO model
 YOLO_MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'yolo/weights/yolo11n-face.pt')
+
+# Check if GPU is available
+DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+print(f"Using device for YOLO: {DEVICE}")
+
+# Thread pool for async processing (5 users per thread)
+MAX_WORKERS = 3  # Adjust based on your CPU/GPU resources
+executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
+# Task queue to limit concurrent user processing
+task_queue = queue.Queue(maxsize=15)  # 5 users per thread × 3 threads
+processing_tasks = {}  # Track task status by session ID
 
 # Face processing functions
 def preprocess_face_for_lightcnn(face_img, target_size=(128, 128)):
