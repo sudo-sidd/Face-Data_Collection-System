@@ -146,6 +146,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // Handle recording completion
             state.mediaRecorder.onstop = () => {
                 const videoBlob = new Blob(state.recordedChunks, { type: 'video/webm' });
+                
+                // Stop camera immediately after recording is complete
+                if (state.stream) {
+                    state.stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // Now upload the video
                 uploadVideo(videoBlob);
             };
             
@@ -218,7 +225,17 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Upload video to server
     async function uploadVideo(blob) {
-        document.getElementById('instruction').textContent = "Uploading video...";
+        const instruction = document.getElementById('instruction');
+        const countdown = document.getElementById('countdown');
+        
+        // Create a loading spinner
+        const loadingSpinner = document.createElement('div');
+        loadingSpinner.className = 'loading-spinner';
+        countdown.parentNode.insertBefore(loadingSpinner, countdown.nextSibling);
+        
+        // Update status message
+        countdown.textContent = "Processing your video";
+        instruction.textContent = "Uploading video to server...";
         
         const formData = new FormData();
         formData.append('video', blob, `student_${state.studentId}_video.webm`);
@@ -228,24 +245,46 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('dept', state.dept);
         
         try {
+            // Show detailed processing steps
+            let processingStep = 0;
+            const processingSteps = [
+                "Uploading video to server...",
+                "Converting video format...",
+                "Analyzing video frames...",
+                "Detecting faces in frames...",
+                "Processing and saving face images..."
+            ];
+            
+            // Update processing step message every 2 seconds
+            const statusInterval = setInterval(() => {
+                processingStep = (processingStep + 1) % processingSteps.length;
+                instruction.textContent = processingSteps[processingStep];
+            }, 2000);
+            
             const response = await fetch(`${config.apiBase}/upload/${state.sessionId}`, {
                 method: 'POST',
                 body: formData
             });
             
+            // Clear interval once request completes
+            clearInterval(statusInterval);
+            
             if (response.ok) {
-                // Stop all tracks and show completion screen
-                if (state.stream) {
-                    state.stream.getTracks().forEach(track => track.stop());
-                }
+                // Show completion message
+                instruction.textContent = "Processing complete! Face images extracted successfully.";
+                
+                // Remove spinner and show completion screen
+                loadingSpinner.remove();
                 elements.cameraSection.classList.add('hidden');
                 elements.completion.classList.remove('hidden');
             } else {
                 console.error('Upload failed:', await response.text());
+                instruction.textContent = "Error: Failed to process video.";
                 alert('Failed to upload video. Please try again.');
             }
         } catch (error) {
             console.error('Error uploading video:', error);
+            instruction.textContent = "Error: Connection issue.";
             alert('Failed to upload video. Please check your connection and try again.');
         }
     }

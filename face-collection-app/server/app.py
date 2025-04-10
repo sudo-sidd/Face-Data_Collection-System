@@ -75,7 +75,7 @@ def extract_faces_from_video(video_path, output_dir, face_confidence=0.3, face_p
     processed_frames = 0
     
     # Use a lower sample rate to process more frames
-    sample_rate = 5  # Process every 5th frame (changed from 30)
+    sample_rate = 5  # Process every 5th frame
     frames_per_sample = 3
     
     # Process each frame in the video
@@ -96,12 +96,6 @@ def extract_faces_from_video(video_path, output_dir, face_confidence=0.3, face_p
                 break
             
             processed_frames += 1
-            
-            # Save a debug frame occasionally to check if video is readable
-            if processed_frames % 10 == 0:
-                debug_filename = os.path.join(output_dir, f"debug_frame_{current_frame + i}.jpg")
-                cv2.imwrite(debug_filename, frame)
-                print(f"Saved debug frame to {debug_filename}")
             
             # Detect faces using YOLO or fallback to Haar cascade
             if use_yolo:
@@ -389,4 +383,4 @@ def generate_qr():
     """
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, ssl_context=('cert.pem', 'key.pem'))
+    app.run(host='0.0.0.0', port=5000)
