@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Configuration
     const config = {
-        videoLength: 10,
+        videoLength: 15,  // Changed from 10 to 15
         apiBase: '/api'
     };
     
@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
         countdownTimer: null
     };
     
-    // DOM Elements
+    // DOM Elements - add retry button
     const elements = {
         video: document.getElementById('video'),
         studentForm: document.getElementById('student-form'),
@@ -47,12 +47,14 @@ document.addEventListener('DOMContentLoaded', () => {
         cameraSection: document.getElementById('camera-section'),
         completion: document.getElementById('completion'),
         restart: document.getElementById('restart'),
+        retry: document.getElementById('retry'),  // Add this line
         progress: document.getElementById('progress')
     };
     
-    // Set up event listeners
+    // Set up event listeners - add retry handler
     elements.studentForm.addEventListener('submit', handleFormSubmit);
     elements.restart.addEventListener('click', handleRestart);
+    elements.retry.addEventListener('click', handleRetry);  // Add this line
     
     // Handle student form submission
     async function handleFormSubmit(event) {
@@ -101,18 +103,19 @@ document.addEventListener('DOMContentLoaded', () => {
         controls.className = 'recording-controls';
         controls.innerHTML = `
             <div id="countdown" class="timer">Ready to record</div>
-            <button id="startRecord" class="btn primary">Start Recording (10s)</button>
+            <button id="startRecord" class="btn primary">Start Recording (15s)</button>
             <button id="stopRecord" class="btn secondary" disabled>Stop Recording</button>
             <div class="instructions-container">
                 <h3>Instructions:</h3>
                 <ul>
-                    <li><strong>Keep phone at arm's length</strong> during recording</li>
-                    <li>Find good lighting on your face</li>
-                    <li>Record a 10-second video following these steps:</li>
-                    <li>- Look straight at the camera (2 sec)</li>
-                    <li>- Slowly turn your head left and right (4 sec)</li>
-                    <li>- Look slightly up and down (2 sec)</li>
-                    <li>- Make a neutral and then smiling expression (2 sec)</li>
+                    <li><strong>Position:</strong> Hold phone at arm's length from your face</li>
+                    <li><strong>Lighting:</strong> Choose a well-lit area with light on your face</li>
+                    <li><strong>Framing:</strong> Ensure only your face is visible and avoid reflections</li>
+                    <li><strong>Follow this 15-second sequence:</strong></li>
+                    <li>1. <strong>Look directly at camera</strong> with neutral expression (3 sec)</li>
+                    <li>2. <strong>Slowly rotate head</strong> left then right, keeping eyes visible (6 sec)</li>
+                    <li>3. <strong>Tilt head</strong> slightly up then down (3 sec)</li>
+                    <li>4. <strong>Change expression</strong> from neutral to smiling (3 sec)</li>
                 </ul>
             </div>
         `;
@@ -180,12 +183,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     countdown.textContent = `Recording: ${timeLeft}s remaining`;
                     
-                    // Update recording instructions
-                    if (timeLeft <= 2) {
+                    // Update recording instructions - adjusted for 15 seconds
+                    if (timeLeft <= 3) {
                         document.getElementById('instruction').textContent = "Make a neutral and then smiling expression";
-                    } else if (timeLeft <= 4) {
+                    } else if (timeLeft <= 6) {
                         document.getElementById('instruction').textContent = "Look slightly up and down";
-                    } else if (timeLeft <= 8) {
+                    } else if (timeLeft <= 12) {
                         document.getElementById('instruction').textContent = "Slowly turn your head left and right";
                     } else {
                         document.getElementById('instruction').textContent = "Look straight at the camera";
@@ -322,5 +325,59 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.completion.classList.add('hidden');
         elements.cameraSection.classList.add('hidden');
         elements.registration.classList.remove('hidden');
+    }
+    
+    // Add the retry handler function
+    async function handleRetry() {
+        try {
+            // Show loading state
+            elements.retry.disabled = true;
+            elements.retry.textContent = "Processing...";
+            
+            // Reset faces folder via API
+            const response = await fetch(`${config.apiBase}/reset-faces/${state.sessionId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    studentId: state.studentId
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error("Failed to reset data");
+            }
+            
+            // Keep student information but reset recording state
+            state.mediaRecorder = null;
+            state.recordedChunks = [];
+            state.stream = null;
+            
+            // Reset UI
+            elements.progress.style.width = '0%';
+            
+            // Remove recording controls if they exist
+            const controls = document.querySelector('.recording-controls');
+            if (controls) controls.remove();
+            
+            // Go back to camera screen
+            elements.completion.classList.add('hidden');
+            elements.cameraSection.classList.remove('hidden');
+            
+            // Reset retry button for next time
+            elements.retry.disabled = false;
+            elements.retry.textContent = "Try Again";
+            
+            // Initialize camera for new recording
+            initCamera();
+        } catch (error) {
+            console.error('Error during retry:', error);
+            alert('Failed to reset. Please try again.');
+            
+            // Reset retry button state
+            elements.retry.disabled = false;
+            elements.retry.textContent = "Try Again";
+        }
     }
 });

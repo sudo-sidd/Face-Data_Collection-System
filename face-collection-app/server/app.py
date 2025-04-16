@@ -90,7 +90,7 @@ def extract_faces_from_video(video_path, output_dir, face_confidence=0.3, face_p
     processed_frames = 0
     
     # Use a lower sample rate to process more frames
-    sample_rate = 10  # Process every 5th frame
+    sample_rate = 5  # Process every 5th frame
     frames_per_sample = 3
     
     # Process each frame in the video
@@ -234,8 +234,8 @@ def start_session():
     student_dir = os.path.join(DATA_DIR, student_id)
     os.makedirs(student_dir, exist_ok=True)
     
-    # Create faces directory
-    faces_dir = os.path.join(student_dir, 'faces')
+    # Create faces directory named after registration number (instead of "faces")
+    faces_dir = os.path.join(student_dir, student_id)
     os.makedirs(faces_dir, exist_ok=True)
     
     # Create session info
@@ -273,8 +273,8 @@ def upload_video(session_id):
     student_dir = os.path.join(DATA_DIR, student_id)
     os.makedirs(student_dir, exist_ok=True)
     
-    # Create faces directory if it doesn't exist
-    faces_dir = os.path.join(student_dir, 'faces')
+    # Create faces directory named after registration number
+    faces_dir = os.path.join(student_dir, student_id)
     os.makedirs(faces_dir, exist_ok=True)
     
     # Get existing session data
@@ -285,7 +285,7 @@ def upload_video(session_id):
     with open(session_file, 'r') as f:
         session_data = json.load(f)
     
-    # Save the original WebM video
+    # Save the original WebM video (temporary)
     webm_filename = f"{student_id}_{session_id}.webm"
     webm_path = os.path.join(student_dir, webm_filename)
     file.save(webm_path)
@@ -324,6 +324,13 @@ def upload_video(session_id):
             
         print(f"Converted video to MP4 format: {mp4_path}")
         
+        # Delete the WebM file now that conversion is complete
+        try:
+            os.remove(webm_path)
+            print(f"Deleted temporary WebM file: {webm_path}")
+        except Exception as e:
+            print(f"Warning: Could not delete WebM file: {e}")
+        
         # Extract faces from the MP4 video
         faces_count = extract_faces_from_video(
             mp4_path, 
@@ -338,6 +345,7 @@ def upload_video(session_id):
         session_data["uploadTime"] = datetime.now().isoformat()
         session_data["facesExtracted"] = True
         session_data["facesCount"] = faces_count
+        session_data["videoPath"] = mp4_path  # Store video path for reference
         
         # Update additional fields if provided in form data
         if name:
@@ -351,16 +359,8 @@ def upload_video(session_id):
         with open(session_file, 'w') as f:
             json.dump(session_data, f)
         
-        # Clean up video files only if faces were successfully extracted
-        if faces_count > 0:
-            try:
-                os.remove(webm_path)
-                os.remove(mp4_path)
-                print(f"Deleted video files after successful processing")
-            except Exception as e:
-                print(f"Warning: Could not delete video files: {e}")
-        else:
-            print(f"Keeping video files for debugging since no faces were extracted")
+        # Keep the MP4 video file for reference
+        print(f"Keeping MP4 video file for reference: {mp4_path}")
             
         return jsonify({
             "success": True,
@@ -373,6 +373,50 @@ def upload_video(session_id):
             "success": False,
             "message": f"Error processing video: {str(e)}"
         }), 500
+
+@app.route('/api/reset-faces/<session_id>', methods=['POST'])
+def reset_faces(session_id):
+    student_id = request.json.get('studentId')
+    if not student_id:
+        return jsonify({"error": "Student ID is required"}), 400
+    
+    # Get path to faces directory using registration number as directory name
+    student_dir = os.path.join(DATA_DIR, student_id)
+    faces_dir = os.path.join(student_dir, student_id)  # Changed from 'faces' to student_id
+    
+    if os.path.exists(faces_dir):
+        try:
+            # Delete all files in faces directory
+            for file in os.listdir(faces_dir):
+                file_path = os.path.join(faces_dir, file)
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+            
+            # Reset session data
+            session_file = os.path.join(student_dir, f"{session_id}.json")
+            if os.path.exists(session_file):
+                with open(session_file, 'r') as f:
+                    session_data = json.load(f)
+                
+                session_data["facesExtracted"] = False
+                session_data["facesCount"] = 0
+                session_data["resetTime"] = datetime.now().isoformat()
+                
+                with open(session_file, 'w') as f:
+                    json.dump(session_data, f)
+            
+            return jsonify({
+                "success": True, 
+                "message": "Face data reset successfully"
+            }), 200
+        except Exception as e:
+            return jsonify({
+                "error": str(e)
+            }), 500
+    else:
+        return jsonify({
+            "error": "Faces directory not found"
+        }), 404
 
 @app.route('/qr')
 def generate_qr():

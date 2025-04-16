@@ -232,3 +232,13 @@ select:focus {
     outline: none;
     border-color: #3498db;
 }
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.button-group .btn {
+    flex: 1;
+}
