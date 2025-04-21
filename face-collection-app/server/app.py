@@ -45,13 +45,30 @@ def preprocess_face_for_lightcnn(face_img, target_size=(128, 128)):
     - Convert to grayscale
     - Resize to target size
     """
-    # Convert to grayscale
-    gray = cv2.cvtColor(face_img, cv2.COLOR_BGR2GRAY)
-    
-    # Resize to target size
-    resized = cv2.resize(gray, target_size, interpolation=cv2.INTER_LANCZOS4)
-    
-    return resized
+    try:
+        # Handle empty or invalid images
+        if face_img is None or face_img.size == 0:
+            print("Warning: Empty face image received")
+            return None
+            
+        # Convert to grayscale
+        if len(face_img.shape) == 3:  # Color image
+            gray = cv2.cvtColor(face_img, cv2.COLOR_BGR2GRAY)
+        else:  # Already grayscale
+            gray = face_img
+        
+        # Resize to target size
+        resized = cv2.resize(gray, target_size, interpolation=cv2.INTER_LANCZOS4)
+        
+        # Ensure single channel output
+        if len(resized.shape) > 2:
+            resized = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+            
+        return resized
+        
+    except Exception as e:
+        print(f"Error in face preprocessing: {e}")
+        return None
 
 def extract_faces_from_video(video_path, output_dir, face_confidence=0.3, face_padding=0.2):
     """Extract faces from video and save preprocessed images using YOLO"""
@@ -163,8 +180,17 @@ def extract_faces_from_video(video_path, output_dir, face_confidence=0.3, face_p
                             timestamp = int(time.time() * 1000)
                             filename = f"frame{current_frame+i}_face{j}_{timestamp}.jpg"
                             filepath = os.path.join(output_dir, filename)
-                            cv2.imwrite(filepath, processed_face)
-                            faces_saved += 1
+                            
+                            if processed_face is not None:
+                                # Ensure single channel (grayscale)
+                                if len(processed_face.shape) > 2:
+                                    processed_face = cv2.cvtColor(processed_face, cv2.COLOR_BGR2GRAY)
+                                # Double-check the size
+                                if processed_face.shape != (128, 128):
+                                    processed_face = cv2.resize(processed_face, (128, 128), interpolation=cv2.INTER_LANCZOS4)
+                                # Save the image
+                                cv2.imwrite(filepath, processed_face)
+                                faces_saved += 1
             else:
                 # Fallback to Haar cascade detection
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -202,9 +228,16 @@ def extract_faces_from_video(video_path, output_dir, face_confidence=0.3, face_p
                     filename = f"frame{current_frame+i}_face{j}_{timestamp}.jpg"
                     filepath = os.path.join(output_dir, filename)
                     
-                    # Save processed face
-                    cv2.imwrite(filepath, processed_face)
-                    faces_saved += 1
+                    if processed_face is not None:
+                        # Ensure single channel (grayscale)
+                        if len(processed_face.shape) > 2:
+                            processed_face = cv2.cvtColor(processed_face, cv2.COLOR_BGR2GRAY)
+                        # Double-check the size
+                        if processed_face.shape != (128, 128):
+                            processed_face = cv2.resize(processed_face, (128, 128), interpolation=cv2.INTER_LANCZOS4)
+                        # Save the image
+                        cv2.imwrite(filepath, processed_face)
+                        faces_saved += 1
     
     # Close resources
     cap.release()

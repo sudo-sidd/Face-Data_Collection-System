@@ -1,0 +1,11 @@
+Report for 2nd_year:
+
+1. Folders with video files AND images in subfolders: 2
+   Folders: 714023247013, 714023247093
+
+2. Folders with ONLY video files (no images in subfolders): 1
+   Folders: 714023247097
+
+3. Students who havent given video: 3
+   Folders: 714023247080, 714023247063, 714023247086
+

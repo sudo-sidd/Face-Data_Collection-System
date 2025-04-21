@@ -148,7 +148,6 @@ canvas {
     margin: 10px 0;
 }
 
-
 .recording-controls {
     margin-top: 15px;
     text-align: center;
@@ -204,6 +203,7 @@ canvas {
 .instructions-container li {
     margin-bottom: 5px;
 }
+
 .loading-spinner {
     margin: 20px auto;
     width: 50px;
@@ -218,6 +218,7 @@ canvas {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
 select {
     width: 100%;
     padding: 10px;
@@ -241,4 +242,103 @@ select:focus {
 
 .button-group .btn {
     flex: 1;
+}
+
+/* Header Styles */
+.header {
+  padding: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-bottom: 2px solid #eaeaea;
+  background-color: #fff;
+  margin-bottom: 20px;
+  width: 100%;
+  overflow: hidden;
+}
+
+.header-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 1200px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.nba, .naac {
+  text-align: center;
+  padding: 5px;
+}
+
+.nba-logo, .naac-logo {
+  height: 60px;
+  width: auto;
+  display: block;
+  margin: 0 auto 5px;
+}
+
+.college-info {
+  text-align: center;
+  flex: 1;
+  padding: 0 10px;
+  min-width: 200px;
+}
+
+.college-logo {
+  height: 60px;
+  display: block;
+  margin: 0 auto 5px;
+}
+
+.college-info h1 {
+  font-size: 18px;
+  color: #006400;
+  margin: 5px 0;
+  word-wrap: break-word;
+}
+
+.college-info p {
+  font-size: 13px;
+  color: #333;
+  margin: 5px 0;
+  font-weight: bold;
+}
+
+/* Add responsive breakpoints */
+@media screen and (max-width: 768px) {
+  .header-container {
+    flex-direction: column;
+  }
+  
+  .nba, .naac {
+    margin: 5px 0;
+  }
+  
+  .college-info {
+    margin: 10px 0;
+    padding: 0 5px;
+  }
+  
+  .college-info h1 {
+    font-size: 16px;
+  }
+  
+  body {
+    padding: 10px;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .nba-logo, .naac-logo {
+    height: 50px;
+  }
+  
+  .college-info h1 {
+    font-size: 14px;
+  }
+  
+  .college-info p {
+    font-size: 12px;
+  }
 }

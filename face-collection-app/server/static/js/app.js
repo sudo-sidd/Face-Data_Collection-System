@@ -9,12 +9,10 @@ document.addEventListener('DOMContentLoaded', () => {
             <p>This browser doesn't support camera access from this URL.</p>
             <p>Please try one of the following:</p>
             <ul>
-                <li>Access this app using <strong>localhost</strong> instead of IP address</li>
+                <li>Give this site access to your camera</li>
                 <li>Use Chrome or Firefox</li>
                 <li>Enable HTTPS for this application</li>
             </ul>
-            <p>Technical details: MediaDevices API requires a secure context (HTTPS or localhost)</p>
-            <p>Try this direct URL: <a href="http://localhost:5000">http://localhost:5000</a></p>
         `;
         
         document.querySelector('.container').prepend(errorSection);
@@ -114,7 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <li><strong>Follow this 15-second sequence:</strong></li>
                     <li>1. <strong>Look directly at camera</strong> with neutral expression (3 sec)</li>
                     <li>2. <strong>Slowly rotate head</strong> left then right, keeping eyes visible (6 sec)</li>
-                    <li>3. <strong>Tilt head</strong> slightly up then down (3 sec)</li>
                     <li>4. <strong>Change expression</strong> from neutral to smiling (3 sec)</li>
                 </ul>
             </div>
